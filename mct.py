@@ -3,7 +3,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 #from PyQt5.QtWidgets import * 
 #from PyQt5.QtCore import *
-from PyQt5.QtWidgets import QDesktopWidget
+from PyQt5.QtWidgets import QDesktopWidget, QLabel
 import numpy as np
 import ccxt
 import datetime as dt
@@ -11,8 +11,8 @@ import pprint as pp
 from math import log10, floor
 import random
 
-#import threading #used only to id the active thread
-#import code
+# import threading #used only to id the active thread
+# import code
 
 
 
@@ -92,9 +92,12 @@ def random_test(form, graph_length=200):
     ts = random.choice(timescale)
     ticker = random.choice(markets)['symbol']
 
+    form.last_ticker = ticker
     if random.choice([True, False]):
+        form.last_real = 'Real'
         gd = real_test(graph_length, ticker, ts)
     else:
+        form.last_real = 'Fake'
         gd = fake_test(graph_length, ticker, ts)    
 
     show_data(form, gd, ticker)
@@ -214,35 +217,14 @@ def init_bar_graph(d):
     return pg.BarGraphItem(x=d.x, y=d.y, height=d.h, width=d.width, brush=d.brush)
 
 
-# class Worker(QThread): #Subclass QThread and re-define run() 
-#     signal = pyqtSignal()
-
-#     def __init__(self):
-#         super().__init__()
-
-#     def raise_sys_exit(self): #more gracefully exit the console
-#         print('(Deactivated Console)')
-#         raise SystemExit
-
-#     def setup_console(self,global_dict):
-#         console_exit = {'exit': self.raise_sys_exit}
-#         self.console = code.InteractiveConsole(locals=dict(global_dict,**console_exit))
-
-#     def run(self):
-#         try:
-#             print('worker', threading.get_ident())
-#             self.console.interact()
-#         except SystemExit:
-#             self.signal.emit()
 
 
-#class Form(QMainWindow):
+
 class Form():
     def __init__(self, *args, **kwargs):
-        # super(Form, self).__init__(*args, **kwargs)
         self.win = pg.GraphicsLayoutWidget(show=True, title='market chart tools')
 
-        self.win.resize(1600, 900)
+        self.win.setGeometry(0, 0, 1600, 900)
         self.win.setWindowTitle('Market Chart Tools')
 
         ag = QDesktopWidget().availableGeometry()
@@ -255,12 +237,17 @@ class Form():
 
         #plot object
         self.plot = pg.PlotWidget()
+        #layout object
+        self.layout = QtGui.QGridLayout()
+
 
         #button objects
         self.btn_go = QtGui.QPushButton('Go!')
         self.btn_go.clicked.connect(self.btn_go_event)
         self.btn_real = QtGui.QPushButton('Real')
         self.btn_real.clicked.connect(self.btn_real_event)
+        self.real_tog = True
+
         self.btn_next = QtGui.QPushButton('Next')
         self.btn_next.clicked.connect(self.btn_next_event)
         self.btn_show = QtGui.QPushButton('Show')
@@ -268,23 +255,40 @@ class Form():
         self.btn_reset = QtGui.QPushButton('Reset')
         self.btn_reset.clicked.connect(self.btn_reset_event)
 
-        self.buttons = []
-        self.buttons.extend([self.btn_go, self.btn_real, self.btn_next, self.btn_show, self.btn_reset])
+        #self.buttons = []
+        #self.buttons.extend([self.btn_go, self.btn_real, self.btn_next, self.btn_show, self.btn_reset])
+
+        #text objects
+        #self.text1 = QtGui.QPushButton(text='last choice')
+        #self.text2 = QtGui.QPushButton(text='ticker')
+
+        self.text3 = QLabel('')
+        #self.text3.move(20, 20)
+        self.text3.setStyleSheet("background-color: lightgreen; \
+                                    border: 1px solid black;")
+        self.text3.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.last_ticker = ''
+        self.last_real = ''
+        self.text3_tog = False
+
+        self.arrow = pg.ArrowItem(pos=(0, 600), angle=-45)
+        self.plot.addItem(self.arrow)
 
         #grid layout
-        self.layout = QtGui.QGridLayout()
         self.win.setLayout(self.layout)
 
         #register objects
+        self.layout.addWidget(self.text3, 5, 0)
+        self.layout.addWidget(self.plot, 0, 2, 8, 1)
         self.layout.addWidget(self.btn_go, 0, 0)
-        self.layout.addWidget(self.btn_real, 1, 0)
+        self.layout.addWidget(self.btn_real, 0, 1)
         self.layout.addWidget(self.btn_next, 2, 0)
         self.layout.addWidget(self.btn_show, 3, 0)
         self.layout.addWidget(self.btn_reset, 4, 0)
-        self.layout.addWidget(self.plot, 0, 1, 9, 1)
 
-        # console
-        #self.console = pg.dbg(*args, **kwargs)
+
+    def add_plot(self):
+        self.layout.addWidget(self.plot, 0, 2, 8, 1)
 
     def win_show(self):
         self.win.show()
@@ -302,19 +306,30 @@ class Form():
         self.plot.addItem(self.bg_up)
         self.plot.addItem(self.bg_dn)
         
-        self.layout.addWidget(self.plot, 0, 1, 9, 1)
+        self.layout.addWidget(self.plot, 0, 2, 8, 1)
 
     def btn_go_event(self):
         run(self)
 
     def btn_real_event(self):
-        pass
+        if self.real_tog:
+            self.btn_real.setText('Fake')
+            self.real_tog = False
+        else:
+            self.btn_real.setText('Real')
+            self.real_tog = True
+        self.win_show()
 
     def btn_next_event(self):
         pass
 
     def btn_show_event(self):
-        pass
+        if self.text3_tog:
+            self.text3.setText('')
+            self.text3_tog = False
+        else:
+            self.text3.setText(f'{self.last_real}\n{self.last_ticker}')
+            self.text3_tog = True
 
     def btn_reset_event(self):
         pass
@@ -324,6 +339,7 @@ class Form():
 def main():
     app = QtGui.QApplication([])
     gui = Form()
+    gui.win.show()
     sys.exit(app.exec_())
 
 

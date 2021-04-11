@@ -1,5 +1,6 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
+from PyQt5.QtWidgets import QDesktopWidget
 import numpy as np
 import ccxt
 import datetime as dt
@@ -92,7 +93,6 @@ def random_test(graph_length=100):
     show_data(gd, ticker)
 
 def real_test(graph_length=100, ticker='BTC/USDT', ts='4h'):
-    global debug
     graph_length = min(graph_length, 499)
     #get real ohlcv data
     data = get_ohlcv(ticker, ts)
@@ -109,7 +109,6 @@ def real_test(graph_length=100, ticker='BTC/USDT', ts='4h'):
     return gd
 
 def fake_test(graph_length=100, ticker='BTC/USDT', ts='4h'):
-    global debug
     graph_length = min(graph_length, 499)
     if debug:
         print(f'+++ Creating fake market data based on: {ts} candles, {ticker}\n')
@@ -147,8 +146,6 @@ def fake_test(graph_length=100, ticker='BTC/USDT', ts='4h'):
     return gd
 
 def candles_from_fake_data(data, graph_length):
-    global debug
-
     chunk = int(len(data) / graph_length)
     candles = []
     for i in range(graph_length):
@@ -197,15 +194,8 @@ def graphify_data(candles):
     return [up_data, dn_data, wick_data]
 
 def show_data(gd, ticker=''):
-    global win
-    global debug
+    plot1 = win.addPlot(title='Market Data')
 
-    if win is not None:
-        win.close()
-        win = None
-    win = pg.plot()
-    win.setFixedSize(1280, 720)
-    
     if debug:
         win.setWindowTitle(ticker)
 
@@ -217,10 +207,55 @@ def show_data(gd, ticker=''):
     win.addItem(bg_up)
     win.addItem(bg_dn)
 
+    win.show()
+
 def init_bar_graph(d):
     return pg.BarGraphItem(x=d.x, y=d.y, height=d.h, width=d.width, brush=d.brush)
 
 
+def init_window():
+    app = QtGui.QApplication([])
+    win = pg.GraphicsLayoutWidget(show=True, title='market chart tools')
+
+    win.resize(1600, 900)
+    win.setWindowTitle('Market Chart Tools')
+
+    ag = QDesktopWidget().availableGeometry()
+    sg = QDesktopWidget().screenGeometry()
+    x = ag.width() - win.width()
+    y = 2 * ag.height() - sg.height() - win.height()
+    win.move(int(x/2), int(y/2))
+
+    pg.setConfigOptions(antialias=True)
+
+    #plot object
+    plot = pg.PlotWidget()
+
+    #button objects
+    btn_go = QtGui.QPushButton('Go!')
+    btn_real = QtGui.QPushButton('Real')
+    btn_next = QtGui.QPushButton('Next')
+    btn_show = QtGui.QPushButton('Show')
+    btn_reset = QtGui.QPushButton('Reset')
+
+    #grid layout
+    layout = QtGui.QGridLayout()
+    win.setLayout(layout)
+
+    #register objects
+    layout.addWidget(btn_go, 0, 0)
+    layout.addWidget(btn_real, 1, 0)
+    layout.addWidget(btn_next, 2, 0)
+    layout.addWidget(btn_show, 3, 0)
+    layout.addWidget(btn_reset, 4, 0)
+    layout.addWidget(plot, 0, 1, 9, 1)
+
+    #display as a new window
+    win.show()
+
+    #start the Qt event loop
+    app.exec_()
 
 
-
+if __name__ == '__main__':
+   init_window()

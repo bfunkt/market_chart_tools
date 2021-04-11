@@ -1,5 +1,8 @@
+import sys
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
+#from PyQt5.QtWidgets import * 
+#from PyQt5.QtCore import *
 from PyQt5.QtWidgets import QDesktopWidget
 import numpy as np
 import ccxt
@@ -8,12 +11,16 @@ import pprint as pp
 from math import log10, floor
 import random
 
+#import threading #used only to id the active thread
+#import code
+
+
 
 debug = False
 exchange = ccxt.binance()
 markets = exchange.fetch_markets()
 
-win = None
+
 
 #number of ms per candle timescale
 # timescale = {   
@@ -66,7 +73,7 @@ class BarGraphData():
         self.y = []
         self.h = []
         
-    def addItem(self, x, y, h):
+    def add_item(self, x, y, h):
         self.x.append(x) # + self.offset)
         self.y.append(y)
         self.h.append(h)
@@ -77,10 +84,10 @@ def get_exponent(n) -> int:
     return floor(base10)
 
 
-def run(graph_length=100):
-    random_test(graph_length)
+def run(form, graph_length=200):
+    random_test(form, graph_length)
 
-def random_test(graph_length=100):
+def random_test(form, graph_length=200):
     graph_length = min(graph_length, 499)
     ts = random.choice(timescale)
     ticker = random.choice(markets)['symbol']
@@ -90,9 +97,9 @@ def random_test(graph_length=100):
     else:
         gd = fake_test(graph_length, ticker, ts)    
 
-    show_data(gd, ticker)
+    show_data(form, gd, ticker)
 
-def real_test(graph_length=100, ticker='BTC/USDT', ts='4h'):
+def real_test(graph_length=200, ticker='BTC/USDT', ts='4h'):
     graph_length = min(graph_length, 499)
     #get real ohlcv data
     data = get_ohlcv(ticker, ts)
@@ -108,7 +115,7 @@ def real_test(graph_length=100, ticker='BTC/USDT', ts='4h'):
 
     return gd
 
-def fake_test(graph_length=100, ticker='BTC/USDT', ts='4h'):
+def fake_test(graph_length=200, ticker='BTC/USDT', ts='4h'):
     graph_length = min(graph_length, 499)
     if debug:
         print(f'+++ Creating fake market data based on: {ts} candles, {ticker}\n')
@@ -185,77 +192,140 @@ def graphify_data(candles):
     wick_data = BarGraphData(0.1, 0.5, brush='w')
 
     for i in np.arange(len(candles)):
-        wick_data.addItem(i, candles[i].wick_value, candles[i].wick_height)
+        wick_data.add_item(i, candles[i].wick_value, candles[i].wick_height)
         if candles[i].uptrend == True:
-            up_data.addItem(i, candles[i].candle_value, candles[i].candle_height)
+            up_data.add_item(i, candles[i].candle_value, candles[i].candle_height)
         else:
-            dn_data.addItem(i, candles[i].candle_value, candles[i].candle_height)
+            dn_data.add_item(i, candles[i].candle_value, candles[i].candle_height)
 
     return [up_data, dn_data, wick_data]
 
-def show_data(gd, ticker=''):
-    plot1 = win.addPlot(title='Market Data')
-
+def show_data(form, gd, ticker=''):
     if debug:
-        win.setWindowTitle(ticker)
+        form.plot.setWindowTitle(ticker)
 
-    bg_up = init_bar_graph(gd[0])
-    bg_dn = init_bar_graph(gd[1])
-    bg_wick = init_bar_graph(gd[2])
-
-    win.addItem(bg_wick)
-    win.addItem(bg_up)
-    win.addItem(bg_dn)
-
-    win.show()
+    data = []
+    data.extend([init_bar_graph(gd[0]), init_bar_graph(gd[1]), init_bar_graph(gd[2])])
+    form.delete_bgi()
+    form.apply_bgi(data)
+    form.win_show()
 
 def init_bar_graph(d):
     return pg.BarGraphItem(x=d.x, y=d.y, height=d.h, width=d.width, brush=d.brush)
 
 
-def init_window():
+# class Worker(QThread): #Subclass QThread and re-define run() 
+#     signal = pyqtSignal()
+
+#     def __init__(self):
+#         super().__init__()
+
+#     def raise_sys_exit(self): #more gracefully exit the console
+#         print('(Deactivated Console)')
+#         raise SystemExit
+
+#     def setup_console(self,global_dict):
+#         console_exit = {'exit': self.raise_sys_exit}
+#         self.console = code.InteractiveConsole(locals=dict(global_dict,**console_exit))
+
+#     def run(self):
+#         try:
+#             print('worker', threading.get_ident())
+#             self.console.interact()
+#         except SystemExit:
+#             self.signal.emit()
+
+
+#class Form(QMainWindow):
+class Form():
+    def __init__(self, *args, **kwargs):
+        # super(Form, self).__init__(*args, **kwargs)
+        self.win = pg.GraphicsLayoutWidget(show=True, title='market chart tools')
+
+        self.win.resize(1600, 900)
+        self.win.setWindowTitle('Market Chart Tools')
+
+        ag = QDesktopWidget().availableGeometry()
+        sg = QDesktopWidget().screenGeometry()
+        x = ag.width() - self.win.width()
+        y = 2 * ag.height() - sg.height() - self.win.height()
+        self.win.move(int(x/2), int(y/2))
+
+        pg.setConfigOptions(antialias=True)
+
+        #plot object
+        self.plot = pg.PlotWidget()
+
+        #button objects
+        self.btn_go = QtGui.QPushButton('Go!')
+        self.btn_go.clicked.connect(self.btn_go_event)
+        self.btn_real = QtGui.QPushButton('Real')
+        self.btn_real.clicked.connect(self.btn_real_event)
+        self.btn_next = QtGui.QPushButton('Next')
+        self.btn_next.clicked.connect(self.btn_next_event)
+        self.btn_show = QtGui.QPushButton('Show')
+        self.btn_show.clicked.connect(self.btn_show_event)
+        self.btn_reset = QtGui.QPushButton('Reset')
+        self.btn_reset.clicked.connect(self.btn_reset_event)
+
+        self.buttons = []
+        self.buttons.extend([self.btn_go, self.btn_real, self.btn_next, self.btn_show, self.btn_reset])
+
+        #grid layout
+        self.layout = QtGui.QGridLayout()
+        self.win.setLayout(self.layout)
+
+        #register objects
+        self.layout.addWidget(self.btn_go, 0, 0)
+        self.layout.addWidget(self.btn_real, 1, 0)
+        self.layout.addWidget(self.btn_next, 2, 0)
+        self.layout.addWidget(self.btn_show, 3, 0)
+        self.layout.addWidget(self.btn_reset, 4, 0)
+        self.layout.addWidget(self.plot, 0, 1, 9, 1)
+
+        # console
+        #self.console = pg.dbg(*args, **kwargs)
+
+    def win_show(self):
+        self.win.show()
+
+    def delete_bgi(self):
+        self.layout.removeWidget(self.plot)
+
+    def apply_bgi(self, data):
+        self.bg_up = data[0]
+        self.bg_dn = data[1]
+        self.bg_wick = data[2]
+
+        self.plot = pg.PlotWidget()
+        self.plot.addItem(self.bg_wick)
+        self.plot.addItem(self.bg_up)
+        self.plot.addItem(self.bg_dn)
+        
+        self.layout.addWidget(self.plot, 0, 1, 9, 1)
+
+    def btn_go_event(self):
+        run(self)
+
+    def btn_real_event(self):
+        pass
+
+    def btn_next_event(self):
+        pass
+
+    def btn_show_event(self):
+        pass
+
+    def btn_reset_event(self):
+        pass
+
+
+
+def main():
     app = QtGui.QApplication([])
-    win = pg.GraphicsLayoutWidget(show=True, title='market chart tools')
-
-    win.resize(1600, 900)
-    win.setWindowTitle('Market Chart Tools')
-
-    ag = QDesktopWidget().availableGeometry()
-    sg = QDesktopWidget().screenGeometry()
-    x = ag.width() - win.width()
-    y = 2 * ag.height() - sg.height() - win.height()
-    win.move(int(x/2), int(y/2))
-
-    pg.setConfigOptions(antialias=True)
-
-    #plot object
-    plot = pg.PlotWidget()
-
-    #button objects
-    btn_go = QtGui.QPushButton('Go!')
-    btn_real = QtGui.QPushButton('Real')
-    btn_next = QtGui.QPushButton('Next')
-    btn_show = QtGui.QPushButton('Show')
-    btn_reset = QtGui.QPushButton('Reset')
-
-    #grid layout
-    layout = QtGui.QGridLayout()
-    win.setLayout(layout)
-
-    #register objects
-    layout.addWidget(btn_go, 0, 0)
-    layout.addWidget(btn_real, 1, 0)
-    layout.addWidget(btn_next, 2, 0)
-    layout.addWidget(btn_show, 3, 0)
-    layout.addWidget(btn_reset, 4, 0)
-    layout.addWidget(plot, 0, 1, 9, 1)
-
-    #display as a new window
-    win.show()
-
-    #start the Qt event loop
-    app.exec_()
+    gui = Form()
+    sys.exit(app.exec_())
 
 
 if __name__ == '__main__':
-   init_window()
+   main()
